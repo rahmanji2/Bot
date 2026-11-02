@@ -1,109 +1,111 @@
 import asyncio
-import logging
-import random
-import feedparser
-from aiogram import Bot, Dispatcher, F, types
-from aiogram.filters import Command
-from aiogram.fsm.context import FSMContext
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
+import json
+import urllib.request
+import urllib.parse
+from http.server import HTTPServer, BaseHTTPRequestHandler
+import threading
 
-from database import init_db, add_giveaway_user, get_random_winner
-
+# আপনার বটের টোকেন
 BOT_TOKEN = "9184579325:AAFi1PFbj39vGpyjVa3TQM2Tob_akfE_RsM"
-CHANNEL_LINK = "https://t.me/teesdfa"
+BASE_URL = f"https://api.telegram.org/bot{BOT_TOKEN}"
 
-logging.basicConfig(level=logging.INFO)
+# প্যানেল বা সার্ভার লাইভ রাখার জন্য একটি ডামি লোকাল সার্ভার (যাতে ক্র্যাশ না করে)
+class SimpleHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"Bot is running!")
 
-bot = Bot(token=BOT_TOKEN)
-dp = Dispatcher()
+def run_web_server():
+    server = HTTPServer(('0.0.0.0', 8080), SimpleHandler)
+    server.serve_forever()
 
-def get_main_menu():
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🎁 Join Giveaway", callback_data="menu_giveaway")],
-        [InlineKeyboardButton(text="📰 Latest News (বাংলা)", callback_data="menu_news")]
-    ])
-    return keyboard
+# টেলিগ্রাম থেকে আপডেট ফেচ করার ফাংশন (Polling)
+def get_updates(offset=None):
+    url = f"{BASE_URL}/getUpdates?timeout=30"
+    if offset:
+        url += f"&offset={offset}"
+    try:
+        req = urllib.request.urlopen(url, timeout=35)
+        data = json.loads(req.read().decode('utf-8'))
+        if data.get("ok"):
+            return data.get("result")
+    except Exception as e:
+        print(f"Error fetching updates: {e}")
+    return []
 
-@dp.message(Command("start"))
-async def cmd_start(message: types.Message):
-    init_db()
-    welcome_text = (
-        f"স্বাগতম, **{message.from_user.first_name}**!\n\n"
-        "এটি আপনার অল-ইন-ওয়ান মাল্টি-পারপাস বট। নিচে থেকে আপনার পছন্দের ফিচার সিলেক্ট করুন:"
-    )
-    await message.answer(welcome_text, reply_markup=get_main_menu(), parse_mode="Markdown")
-
-@dp.callback_query(F.data == "back_home")
-async def back_home(callback: types.CallbackQuery):
-    await callback.message.edit_text(
-        "মূল মেনুতে ফিরে এসেছেন:",
-        reply_markup=get_main_menu()
-    )
-    await callback.answer()
-
-@dp.callback_query(F.data == "menu_giveaway")
-async def join_giveaway(callback: types.CallbackQuery):
-    user = callback.from_user
-    success = add_giveaway_user(user.id, user.username or user.first_name)
-    
-    if success:
-        text = "🎉 অভিনন্দন! সফলভাবে গিভঅ্যাওয়েতে আপনার নাম এন্ট্রি করা হয়েছে।"
-    else:
-        text = "ℹ️ আপনি ইতিমধ্যে এই গিভঅ্যাওয়েতে জয়েন করে আছেন!"
+# টেলিগ্রামে মেসেজ পাঠানোর ফাংশন
+def send_message(chat_id, text, reply_markup=None):
+    url = f"{BASE_URL}/sendMessage"
+    payload = {
+        "chat_id": chat_id,
+        "text": text,
+        "parse_mode": "Markdown"
+    }
+    if reply_markup:
+        payload["reply_markup"] = reply_markup
         
-    back_kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔙 মেনুতে ফিরে যান", callback_data="back_home")]
-    ])
-    await callback.message.edit_text(text, reply_markup=back_kb)
-    await callback.answer()
+    data = urllib.parse.urlencode(payload).encode('utf-8')
+    try:
+        urllib.request.urlopen(url, data=data)
+    except Exception as e:
+        print(f"Error sending message: {e}")
 
-@dp.message(Command("picker"))
-async def pick_winner(message: types.Message):
-    winner = get_random_winner()
-    if winner:
-        user_id, username = winner
-        name_display = f"@{username}" if username else f"ID: {user_id}"
-        await message.answer(f"🏆 **গিভঅ্যাওয়ে উইনার:** {name_display} (`{user_id}`)!", parse_mode="Markdown")
-    else:
-        await message.answer("❌ গিভঅ্যাওয়েতে এখনও কেউ জয়েন করেনি!")
-
-@dp.callback_query(F.data == "menu_news")
-async def fetch_latest_news(callback: types.CallbackQuery):
-    await callback.message.edit_text("📰 লেটেস্ট বাংলা নিউজ সংগ্রহ করা হচ্ছে, একটু অপেক্ষা করুন...")
-    
-    rss_feeds = [
-        "https://www.prothomalo.com/feed/",
-        "https://www.jugantor.com/feed/",
-        "https://www.kalerkantho.com/rss.xml"
-    ]
-    
-    news_list = []
-    for url in rss_feeds:
-        try:
-            feed = feedparser.parse(url)
-            if feed.entries:
-                entry = feed.entries[0]
-                news_list.append(f"📌 **{entry.title}**\n🔗 [বিস্তারিত পড়ুন]({entry.link})")
-        except Exception:
-            continue
-            
-    if news_list:
-        news_text = "📰 **সর্বশেষ বাংলা সংবাদ:**\n\n" + "\n\n".join(news_list[:4])
-    else:
-        news_text = "❌ দুঃখিত, এই মুহূর্তে নিউজ ফেচ করা সম্ভব হচ্ছে না।"
-        
-    back_kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔙 মেনুতে ফিরে যান", callback_data="back_home")]
-    ])
-    
-    await callback.message.edit_text(news_text, reply_markup=back_kb, parse_mode="Markdown", disable_web_page_preview=True)
-    await callback.answer()
-
+# মেইন লজিক ও কমান্ড হ্যান্ডেলার
 async def main():
-    init_db()
-    print("🤖 Bot is starting successfully...")
-    await dp.start_polling(bot)
+    print("🤖 Pure Python Bot is starting...")
+    offset = None
+    
+    # ব্যাকগ্রাউন্ডে ওয়েব সার্ভার রান করা
+    threading.Thread(target=run_web_server, daemon=True).start()
+
+    while True:
+        updates = get_updates(offset)
+        for update in updates:
+            offset = update["update_id"] + 1
+            
+            # মেসেজ চেক করা
+            if "message" in update:
+                message = update["message"]
+                chat_id = message["chat"]["id"]
+                text = message.get("text", "")
+                user_name = message["from"].get("first_name", "User")
+                
+                if text == "/start":
+                    # ইনলাইন বাটনসহ মেনু
+                    keyboard = {
+                        "inline_keyboard": [
+                            [{"text": "🎁 Join Giveaway", "callback_data": "giveaway"}],
+                            [{"text": "📰 Latest News", "callback_data": "news"}]
+                        ]
+                    }
+                    welcome_text = f"স্বাগতম, *{user_name}*!\n\nএটি আপনার পিওর পাইথন বট। নিচের অপশন থেকে সিলেক্ট করুন:"
+                    send_message(chat_id, welcome_text, json.dumps(keyboard))
+                    
+            # ইনলাইন বাটন ক্লিক হ্যান্ডেল করা (Callback Query)
+            elif "callback_query" in update:
+                callback = update["callback_query"]
+                chat_id = callback["message"]["chat"]["id"]
+                data = callback["data"]
+                
+                if data == "giveaway":
+                    send_message(chat_id, "🎉 অভিনন্দন! সফলভাবে গিভঅ্যাওয়েতে আপনার নাম এন্ট্রি করা হয়েছে।")
+                elif data == "news":
+                    # প্রথম আলোর RSS থেকে হেডার ফেচ করার বিল্ট-ইন পদ্ধতি
+                    try:
+                        req = urllib.request.urlopen("https://www.prothomalo.com/feed/", timeout=10)
+                        xml_data = req.read().decode('utf-8')
+                        # সিম্পল ট্যাগ এক্সট্রাকশন (লাইব্রেরি ছাড়া)
+                        start = xml_data.find("<title>") + 7
+                        end = xml_data.find("</title>")
+                        news_title = xml_data[start:end]
+                        news_text = f"📰 *সর্বশেষ সংবাদ (প্রথম আলো):*\n\n📌 {news_title}"
+                    except:
+                        news_text = "❌ দুঃখিত, এই মুহূর্তে নিউজ লোড করা যাচ্ছে না।"
+                        
+                    send_message(chat_id, news_text)
+                    
+        await asyncio.sleep(1)
 
 if __name__ == "__main__":
     asyncio.run(main())
