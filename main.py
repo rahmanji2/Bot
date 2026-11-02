@@ -18,7 +18,6 @@ logging.basicConfig(level=logging.INFO)
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-# --- প্রধান মেনু কিবোর্ড (IP Lookup ছাড়া) ---
 def get_main_menu():
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🎁 Join Giveaway", callback_data="menu_giveaway")],
@@ -26,7 +25,6 @@ def get_main_menu():
     ])
     return keyboard
 
-# /start কমান্ড
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
     init_db()
@@ -36,7 +34,6 @@ async def cmd_start(message: types.Message):
     )
     await message.answer(welcome_text, reply_markup=get_main_menu(), parse_mode="Markdown")
 
-# হোম বাটনে ফেরার হ্যান্ডেলার
 @dp.callback_query(F.data == "back_home")
 async def back_home(callback: types.CallbackQuery):
     await callback.message.edit_text(
@@ -45,7 +42,6 @@ async def back_home(callback: types.CallbackQuery):
     )
     await callback.answer()
 
-# ==================== ১. Giveaway ফিচার ====================
 @dp.callback_query(F.data == "menu_giveaway")
 async def join_giveaway(callback: types.CallbackQuery):
     user = callback.from_user
@@ -62,7 +58,6 @@ async def join_giveaway(callback: types.CallbackQuery):
     await callback.message.edit_text(text, reply_markup=back_kb)
     await callback.answer()
 
-# উইনার সিলেক্ট করার সিক্রেট কমান্ড (/picker)
 @dp.message(Command("picker"))
 async def pick_winner(message: types.Message):
     winner = get_random_winner()
@@ -73,7 +68,6 @@ async def pick_winner(message: types.Message):
     else:
         await message.answer("❌ গিভঅ্যাওয়েতে এখনও কেউ জয়েন করেনি!")
 
-# ==================== ২. News Scraper ফিচার (বাংলা নিউজপেপার) ====================
 @dp.callback_query(F.data == "menu_news")
 async def fetch_latest_news(callback: types.CallbackQuery):
     await callback.message.edit_text("📰 লেটেস্ট বাংলা নিউজ সংগ্রহ করা হচ্ছে, একটু অপেক্ষা করুন...")
