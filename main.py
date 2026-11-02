@@ -43,7 +43,8 @@ def send_message(chat_id, text, reply_markup=None):
     payload = {
         "chat_id": chat_id,
         "text": text,
-        "parse_mode": "Markdown"
+        "parse_mode": "Markdown",
+        "disable_web_page_preview": False
     }
     if reply_markup:
         payload["reply_markup"] = reply_markup
@@ -72,15 +73,15 @@ async def main():
                 user_name = message["from"].get("first_name", "User")
                 
                 if text == "/start":
+                    # গিভঅ্যাওয়ে বাদ দিয়ে শুধু নিউজ অপশনগুলো রাখা হলো
                     keyboard = {
                         "inline_keyboard": [
-                            [{"text": "🎁 Join Giveaway", "callback_data": "giveaway"}],
                             [{"text": "📰 প্রথম আলো নিউজ", "callback_data": "news_prothomalo"}],
                             [{"text": "📰 সময় টিভি নিউজ", "callback_data": "news_somoy"}],
                             [{"text": "📰 যমুনা টিভি নিউজ", "callback_data": "news_jamuna"}]
                         ]
                     }
-                    welcome_text = f"স্বাগতম, *{user_name}*!\n\nপছন্দের চ্যানেল বা পেপার সিলেক্ট করুন:"
+                    welcome_text = f"স্বাগতম, *{user_name}*!\n\nযেকোনো চ্যানেল বা পেপারের সর্বশেষ খবর দেখতে নিচে ক্লিক করুন:"
                     send_message(chat_id, welcome_text, json.dumps(keyboard))
                     
             elif "callback_query" in update:
@@ -88,9 +89,7 @@ async def main():
                 chat_id = callback["message"]["chat"]["id"]
                 data = callback["data"]
                 
-                if data == "giveaway":
-                    send_message(chat_id, "🎉 অভিনন্দন! সফলভাবে গিভঅ্যাওয়েতে আপনার নাম এন্ট্রি করা হয়েছে।")
-                elif data in NEWS_SOURCES:
+                if data in NEWS_SOURCES:
                     paper_name, feed_url = NEWS_SOURCES[data]
                     news_text = ""
                     try:
@@ -101,21 +100,26 @@ async def main():
                         req = urllib.request.urlopen(req_obj, timeout=12)
                         xml_data = req.read().decode('utf-8', errors='ignore')
                         
-                        # গুগলের RSS থেকে সমস্ত <item> ট্যাগের ভেতরের টাইটেলগুলো খুঁজে বের করা
                         items = re.findall(r'<item>(.*?)</item>', xml_data, re.DOTALL)
                         real_title = None
+                        real_link = None
                         
                         for item in items:
-                            match = re.search(r'<title>(.*?)</title>', item, re.DOTALL)
-                            if match:
-                                t = match.group(1).replace('<![CDATA[', '').replace(']]>', '').strip()
-                                # যদি টাইটেলে শুধু 'Google News' না থাকে, তবে সেটিই আসল নিউজ
+                            title_match = re.search(r'<title>(.*?)</title>', item, re.DOTALL)
+                            link_match = re.search(r'<link>(.*?)</link>', item, re.DOTALL)
+                            
+                            if title_match:
+                                t = title_match.group(1).replace('<![CDATA[', '').replace(']]>', '').strip()
                                 if "Google News" not in t:
                                     real_title = t
+                                    if link_match:
+                                        real_link = link_match.group(1).strip()
                                     break
                         
                         if real_title:
                             news_text = f"📰 *সর্বশেষ সংবাদ ({paper_name}):*\n\n📌 {real_title}"
+                            if real_link:
+                                news_text += f"\n\n🔗 [বিস্তারিত পড়তে এখানে ক্লিক করুন]({real_link})"
                         else:
                             news_text = f"❌ এই মুহূর্তে {paper_name}-এর কোনো শিরোনাম পাওয়া যায়নি।"
                     except Exception as e:
