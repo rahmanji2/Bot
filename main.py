@@ -12,21 +12,17 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from database import init_db, add_giveaway_user, get_random_winner
 
-# বটের তথ্য
 BOT_TOKEN = "9184579325:AAFi1PFbj39vGpyjVa3TQM2Tob_akfE_RsM"
 CHANNEL_LINK = "https://t.me/teesdfa"
 
-# লগিং সেটআপ
 logging.basicConfig(level=logging.INFO)
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-# স্টেট মেশিন (IP/Domain ইনপুট নেওয়ার জন্য)
 class LookupState(StatesGroup):
     waiting_for_query = State()
 
-# --- প্রধান মেনু কিবোর্ড ---
 def get_main_menu():
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🔍 IP & Domain Lookup", callback_data="menu_lookup")],
@@ -35,7 +31,6 @@ def get_main_menu():
     ])
     return keyboard
 
-# /start কমান্ড
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
     init_db()
@@ -45,7 +40,6 @@ async def cmd_start(message: types.Message):
     )
     await message.answer(welcome_text, reply_markup=get_main_menu(), parse_mode="Markdown")
 
-# হোম বাটনে ফেরার হ্যান্ডেলার
 @dp.callback_query(F.data == "back_home")
 async def back_home(callback: types.CallbackQuery):
     await callback.message.edit_text(
@@ -54,7 +48,6 @@ async def back_home(callback: types.CallbackQuery):
     )
     await callback.answer()
 
-# ==================== ১. IP & Domain Lookup ফিচার ====================
 @dp.callback_query(F.data == "menu_lookup")
 async def ask_lookup_query(callback: types.CallbackQuery, state: FSMContext):
     await callback.message.edit_text(
@@ -94,8 +87,6 @@ async def process_lookup(message: types.Message, state: FSMContext):
     await message.answer(result, reply_markup=back_kb, parse_mode="Markdown")
     await state.clear()
 
-
-# ==================== ২. Giveaway ফিচার ====================
 @dp.callback_query(F.data == "menu_giveaway")
 async def join_giveaway(callback: types.CallbackQuery):
     user = callback.from_user
@@ -112,7 +103,6 @@ async def join_giveaway(callback: types.CallbackQuery):
     await callback.message.edit_text(text, reply_markup=back_kb)
     await callback.answer()
 
-# উইনার সিলেক্ট করার সিক্রেট কমান্ড (/picker)
 @dp.message(Command("picker"))
 async def pick_winner(message: types.Message):
     winner = get_random_winner()
@@ -123,8 +113,6 @@ async def pick_winner(message: types.Message):
     else:
         await message.answer("❌ গিভঅ্যাওয়েতে এখনও কেউ জয়েন করেনি!")
 
-
-# ==================== ৩. News Scraper ফিচার (বাংলা নিউজপেপার) ====================
 @dp.callback_query(F.data == "menu_news")
 async def fetch_latest_news(callback: types.CallbackQuery):
     await callback.message.edit_text("📰 লেটেস্ট বাংলা নিউজ সংগ্রহ করা হচ্ছে, একটু অপেক্ষা করুন...")
@@ -157,8 +145,6 @@ async def fetch_latest_news(callback: types.CallbackQuery):
     await callback.message.edit_text(news_text, reply_markup=back_kb, parse_mode="Markdown", disable_web_page_preview=True)
     await callback.answer()
 
-
-# ==================== মেইন রান ফাংশন ====================
 async def main():
     init_db()
     print("🤖 Bot is starting successfully...")
