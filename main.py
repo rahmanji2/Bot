@@ -9,11 +9,11 @@ import threading
 BOT_TOKEN = "9184579325:AAFi1PFbj39vGpyjVa3TQM2Tob_akfE_RsM"
 BASE_URL = f"https://api.telegram.org/bot{BOT_TOKEN}"
 
-# নিউজ পেপারগুলোর RSS লিংক এবং নাম
+# গুগল নিউজ RSS ফিড লিংক (বট ব্লক এড়ানোর জন্য)
 NEWS_SOURCES = {
-    "news_prothomalo": ("প্রথম আলো", "https://www.prothomalo.com/feed/"),
-    "news_jugantor": ("যুগান্তর", "https://www.jugantor.com/feed/"),
-    "news_kalerkantho": ("কালের কণ্ঠ", "https://www.kalerkantho.com/rss.xml")
+    "news_prothomalo": ("প্রথম আলো", "https://news.google.com/rss/search?q=Prothom+Alo&hl=bn&gl=BD&ceid=BD:bn"),
+    "news_somoy": ("সময় টিভি", "https://news.google.com/rss/search?q=Somoy+TV+news&hl=bn&gl=BD&ceid=BD:bn"),
+    "news_jamuna": ("যমুনা টেলিভিশন", "https://news.google.com/rss/search?q=Jamuna+TV+news&hl=bn&gl=BD&ceid=BD:bn")
 }
 
 class SimpleHandler(BaseHTTPRequestHandler):
@@ -73,16 +73,15 @@ async def main():
                 user_name = message["from"].get("first_name", "User")
                 
                 if text == "/start":
-                    # মূল মেনু যেখানে নিউজ পেপার সিলেক্ট করার অপশন থাকবে
                     keyboard = {
                         "inline_keyboard": [
                             [{"text": "🎁 Join Giveaway", "callback_data": "giveaway"}],
                             [{"text": "📰 প্রথম আলো নিউজ", "callback_data": "news_prothomalo"}],
-                            [{"text": "📰 যুগান্তর নিউজ", "callback_data": "news_jugantor"}],
-                            [{"text": "📰 কালের কণ্ঠ নিউজ", "callback_data": "news_kalerkantho"}]
+                            [{"text": "📰 সময় টিভি নিউজ", "callback_data": "news_somoy"}],
+                            [{"text": "📰 যমুনা টিভি নিউজ", "callback_data": "news_jamuna"}]
                         ]
                     }
-                    welcome_text = f"স্বাগতম, *{user_name}*!\n\nপছন্দের নিউজপেপার বা অপশনটি সিলেক্ট করুন:"
+                    welcome_text = f"স্বাগতম, *{user_name}*!\n\nপছন্দের চ্যানেল বা পেপার সিলেক্ট করুন:"
                     send_message(chat_id, welcome_text, json.dumps(keyboard))
                     
             elif "callback_query" in update:
@@ -94,21 +93,23 @@ async def main():
                     send_message(chat_id, "🎉 অভিনন্দন! সফলভাবে গিভঅ্যাওয়েতে আপনার নাম এন্ট্রি করা হয়েছে।")
                 elif data in NEWS_SOURCES:
                     paper_name, feed_url = NEWS_SOURCES[data]
+                    news_text = ""
                     try:
                         req_obj = urllib.request.Request(
                             feed_url,
                             headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
                         )
-                        req = urllib.request.urlopen(req_obj, timeout=10)
-                        xml_data = req.read().decode('utf-8')
+                        req = urllib.request.urlopen(req_obj, timeout=12)
+                        xml_data = req.read().decode('utf-8', errors='ignore')
                         
-                        titles = re.findall(r'<item>.*?<title>(.*?)</title>.*?</item>', xml_data, re.DOTALL)
+                        titles = re.findall(r'<title>(.*?)</title>', xml_data, re.DOTALL)
                         
-                        if titles:
-                            news_title = titles[0].replace('<![CDATA[', '').replace(']]>', '').strip()
-                            news_text = f"📰 *সর্বশেষ সংবাদ ({paper_name}):*\n\n📌 {news_title}"
+                        if len(titles) > 1:
+                            # প্রথম টাইটেল গুগল নিউজের হেডার হয়, তাই ২য় বা ৩য় টাইটেল থেকে রিয়েল নিউজ পাওয়া যায়
+                            clean_title = titles[1].replace('<![CDATA[', '').replace(']]>', '').strip()
+                            news_text = f"📰 *সর্বশেষ সংবাদ ({paper_name}):*\n\n📌 {clean_title}"
                         else:
-                            news_text = f"❌ এই মুহূর্তে {paper_name}-এ কোনো সংবাদ পাওয়া যায়নি।"
+                            news_text = f"❌ এই মুহূর্তে {paper_name}-এর নিউজ পাওয়া যায়নি।"
                     except Exception as e:
                         news_text = f"❌ {paper_name}-এর নিউজ লোড করতে সমস্যা হচ্ছে।"
                         
