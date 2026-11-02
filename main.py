@@ -9,10 +9,14 @@ import threading
 BOT_TOKEN = "9184579325:AAFi1PFbj39vGpyjVa3TQM2Tob_akfE_RsM"
 BASE_URL = f"https://api.telegram.org/bot{BOT_TOKEN}"
 
-NEWS_SOURCES = {
-    "news_prothomalo": ("প্রথম আলো", "https://news.google.com/rss/search?q=Prothom+Alo&hl=bn&gl=BD&ceid=BD:bn"),
-    "news_somoy": ("সময় টিভি", "https://news.google.com/rss/search?q=Somoy+TV+news&hl=bn&gl=BD&ceid=BD:bn"),
-    "news_jamuna": ("যমুনা টেলিভিশন", "https://news.google.com/rss/search?q=Jamuna+TV+news&hl=bn&gl=BD&ceid=BD:bn")
+# নিউজ সোর্সগুলো
+NEWS_COMMANDS = {
+    "/prothomalo": ("প্রথম আলো", "https://news.google.com/rss/search?q=Prothom+Alo&hl=bn&gl=BD&ceid=BD:bn"),
+    "/somoy": ("সময় টিভি", "https://news.google.com/rss/search?q=Somoy+TV+news&hl=bn&gl=BD&ceid=BD:bn"),
+    "/jamuna": ("যমুনা টেলিভিশন", "https://news.google.com/rss/search?q=Jamuna+TV+news&hl=bn&gl=BD&ceid=BD:bn"),
+    "/ekattor": ("একাত্তর টিভি", "https://news.google.com/rss/search?q=Ekattor+TV+news&hl=bn&gl=BD&ceid=BD:bn"),
+    "/independent": ("ইন্ডিপেন্ডেন্ট টিভি", "https://news.google.com/rss/search?q=Independent+Television+Bangladesh&hl=bn&gl=BD&ceid=BD:bn"),
+    "/channeli": ("চ্যানেল আই", "https://news.google.com/rss/search?q=Channel+i+news&hl=bn&gl=BD&ceid=BD:bn")
 }
 
 class SimpleHandler(BaseHTTPRequestHandler):
@@ -38,7 +42,7 @@ def get_updates(offset=None):
         print(f"Error fetching updates: {e}")
     return []
 
-def send_message(chat_id, text, reply_markup=None):
+def send_message(chat_id, text):
     url = f"{BASE_URL}/sendMessage"
     payload = {
         "chat_id": chat_id,
@@ -46,9 +50,6 @@ def send_message(chat_id, text, reply_markup=None):
         "parse_mode": "Markdown",
         "disable_web_page_preview": False
     }
-    if reply_markup:
-        payload["reply_markup"] = reply_markup
-        
     data = urllib.parse.urlencode(payload).encode('utf-8')
     try:
         urllib.request.urlopen(url, data=data)
@@ -56,7 +57,7 @@ def send_message(chat_id, text, reply_markup=None):
         print(f"Error sending message: {e}")
 
 async def main():
-    print("🤖 Pure Python Bot is starting...")
+    print("🤖 Multi-Feature Pure Python Bot is starting...")
     offset = None
     
     threading.Thread(target=run_web_server, daemon=True).start()
@@ -69,28 +70,28 @@ async def main():
             if "message" in update:
                 message = update["message"]
                 chat_id = message["chat"]["id"]
-                text = message.get("text", "")
+                text = message.get("text", "").strip()
                 user_name = message["from"].get("first_name", "User")
                 
                 if text == "/start":
-                    # গিভঅ্যাওয়ে বাদ দিয়ে শুধু নিউজ অপশনগুলো রাখা হলো
-                    keyboard = {
-                        "inline_keyboard": [
-                            [{"text": "📰 প্রথম আলো নিউজ", "callback_data": "news_prothomalo"}],
-                            [{"text": "📰 সময় টিভি নিউজ", "callback_data": "news_somoy"}],
-                            [{"text": "📰 যমুনা টিভি নিউজ", "callback_data": "news_jamuna"}]
-                        ]
-                    }
-                    welcome_text = f"স্বাগতম, *{user_name}*!\n\nযেকোনো চ্যানেল বা পেপারের সর্বশেষ খবর দেখতে নিচে ক্লিক করুন:"
-                    send_message(chat_id, welcome_text, json.dumps(keyboard))
+                    help_text = (
+                        f"স্বাগতম, *{user_name}*!\n\n"
+                        "🤖 এই বটের মাধ্যমে আপনি লাইভ নিউজ, আবহাওয়া ও নামাজের সময় জানতে পারবেন।\n\n"
+                        "📰 *নিউজ কমান্ডসমূহ:*\n"
+                        "• /prothomalo - প্রথম আলো\n"
+                        "• /somoy - সময় টিভি\n"
+                        "• /jamuna - যমুনা টেলিভিশন\n"
+                        "• /ekattor - একাত্তর টিভি\n"
+                        "• /independent - ইন্ডিপেন্ডেন্ট টিভি\n"
+                        "• /channeli - চ্যানেল আই\n\n"
+                        "🌤 *অন্যান্য ফিচার:*\n"
+                        "• /weather - ঢাকার লাইভ আবহাওয়া\n"
+                        "• /prayer - আজকের নামাজের সময়সূচি (ঢাকা)"
+                    )
+                    send_message(chat_id, help_text)
                     
-            elif "callback_query" in update:
-                callback = update["callback_query"]
-                chat_id = callback["message"]["chat"]["id"]
-                data = callback["data"]
-                
-                if data in NEWS_SOURCES:
-                    paper_name, feed_url = NEWS_SOURCES[data]
+                elif text in NEWS_COMMANDS:
+                    paper_name, feed_url = NEWS_COMMANDS[text]
                     news_text = ""
                     try:
                         req_obj = urllib.request.Request(
@@ -126,6 +127,51 @@ async def main():
                         news_text = f"❌ নিউজ লোড করতে সমস্যা হচ্ছে।"
                         
                     send_message(chat_id, news_text)
+
+                elif text == "/weather":
+                    try:
+                        # ফ্রি ওয়েদার এপিআই থেকে ঢাকার আবহাওয়া ফেচ করা
+                        weather_url = "https://wttr.in/Dhaka?format=j1"
+                        req_obj = urllib.request.Request(weather_url, headers={'User-Agent': 'Mozilla/5.0'})
+                        req = urllib.request.urlopen(req_obj, timeout=10)
+                        w_data = json.loads(req.read().decode('utf-8'))
+                        
+                        current = w_data['current_condition'][0]
+                        temp = current['temp_C']
+                        desc = current['lang_bn'][0]['value'] if 'lang_bn' in current else current['weatherDesc'][0]['value']
+                        humidity = current['humidity']
+                        
+                        weather_msg = (
+                            f"🌤 *ঢাকার লাইভ আবহাওয়ার আপডেট:*\n\n"
+                            f"🌡 তাপমাত্রা: *{temp}°C*\n"
+                            f"☁️ অবস্থা: *{desc}*\n"
+                            f"💧 আর্দ্রতা: *{humidity}%*"
+                        )
+                        send_message(chat_id, weather_msg)
+                    except Exception:
+                        send_message(chat_id, "❌ আবহাওয়া তথ্য লোড করতে সমস্যা হচ্ছে।")
+
+                elif text == "/prayer":
+                    try:
+                        # ইসলামিক ফাইন্যান্স বা প্রিয়ার টাইম ফ্রি এপিআই (ঢাকা)
+                        prayer_url = "http://api.aladhan.com/v1/timingsByCity?city=Dhaka&country=Bangladesh&method=1"
+                        req_obj = urllib.request.Request(prayer_url, headers={'User-Agent': 'Mozilla/5.0'})
+                        req = urllib.request.urlopen(req_obj, timeout=10)
+                        p_data = json.loads(req.read().decode('utf-8'))
+                        
+                        timings = p_data['data']['timings']
+                        prayer_msg = (
+                            f"🕌 *আজকের নামাজের সময়সূচি (ঢাকা):*\n\n"
+                            f"🌅 ফজর: *{timings['Fajr']}*\n"
+                            f"☀️ সূর্যোদয়: *{timings['Sunrise']}*\n"
+                            f" 낮 ظہر / যোহর: *{timings['Dhuhr']}*\n"
+                            f" عصر / আসর: *{timings['Asr']}*\n"
+                            f" 🌆 মাগরিব: *{timings['Maghrib']}*\n"
+                            f" 🌙 এশা: *{timings['Isha']}*"
+                        )
+                        send_message(chat_id, prayer_msg)
+                    except Exception:
+                        send_message(chat_id, "❌ নামাজের সময়সূচি লোড করতে সমস্যা হচ্ছে।")
                     
         await asyncio.sleep(1)
 
