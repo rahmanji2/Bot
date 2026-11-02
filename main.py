@@ -9,7 +9,6 @@ import threading
 BOT_TOKEN = "9184579325:AAFi1PFbj39vGpyjVa3TQM2Tob_akfE_RsM"
 BASE_URL = f"https://api.telegram.org/bot{BOT_TOKEN}"
 
-# গুগল নিউজ RSS ফিড লিংক (বট ব্লক এড়ানোর জন্য)
 NEWS_SOURCES = {
     "news_prothomalo": ("প্রথম আলো", "https://news.google.com/rss/search?q=Prothom+Alo&hl=bn&gl=BD&ceid=BD:bn"),
     "news_somoy": ("সময় টিভি", "https://news.google.com/rss/search?q=Somoy+TV+news&hl=bn&gl=BD&ceid=BD:bn"),
@@ -102,16 +101,25 @@ async def main():
                         req = urllib.request.urlopen(req_obj, timeout=12)
                         xml_data = req.read().decode('utf-8', errors='ignore')
                         
-                        titles = re.findall(r'<title>(.*?)</title>', xml_data, re.DOTALL)
+                        # গুগলের RSS থেকে সমস্ত <item> ট্যাগের ভেতরের টাইটেলগুলো খুঁজে বের করা
+                        items = re.findall(r'<item>(.*?)</item>', xml_data, re.DOTALL)
+                        real_title = None
                         
-                        if len(titles) > 1:
-                            # প্রথম টাইটেল গুগল নিউজের হেডার হয়, তাই ২য় বা ৩য় টাইটেল থেকে রিয়েল নিউজ পাওয়া যায়
-                            clean_title = titles[1].replace('<![CDATA[', '').replace(']]>', '').strip()
-                            news_text = f"📰 *সর্বশেষ সংবাদ ({paper_name}):*\n\n📌 {clean_title}"
+                        for item in items:
+                            match = re.search(r'<title>(.*?)</title>', item, re.DOTALL)
+                            if match:
+                                t = match.group(1).replace('<![CDATA[', '').replace(']]>', '').strip()
+                                # যদি টাইটেলে শুধু 'Google News' না থাকে, তবে সেটিই আসল নিউজ
+                                if "Google News" not in t:
+                                    real_title = t
+                                    break
+                        
+                        if real_title:
+                            news_text = f"📰 *সর্বশেষ সংবাদ ({paper_name}):*\n\n📌 {real_title}"
                         else:
-                            news_text = f"❌ এই মুহূর্তে {paper_name}-এর নিউজ পাওয়া যায়নি।"
+                            news_text = f"❌ এই মুহূর্তে {paper_name}-এর কোনো শিরোনাম পাওয়া যায়নি।"
                     except Exception as e:
-                        news_text = f"❌ {paper_name}-এর নিউজ লোড করতে সমস্যা হচ্ছে।"
+                        news_text = f"❌ নিউজ লোড করতে সমস্যা হচ্ছে।"
                         
                     send_message(chat_id, news_text)
                     
