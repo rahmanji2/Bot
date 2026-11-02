@@ -1,4 +1,4 @@
- import asyncio
+import asyncio
 import logging
 import requests
 import random
@@ -129,7 +129,6 @@ async def pick_winner(message: types.Message):
 async def fetch_latest_news(callback: types.CallbackQuery):
     await callback.message.edit_text("📰 লেটেস্ট বাংলা নিউজ সংগ্রহ করা হচ্ছে, একটু অপেক্ষা করুন...")
     
-    # আপনার পছন্দের নিউজ পেপারের RSS ফিড লিস্ট (প্রথম আলো, ইত্তেফাক, কালের কণ্ঠ, যুগান্তর ইত্যাদি)
     rss_feeds = [
         "https://www.prothomalo.com/feed/",
         "https://www.jugantor.com/feed/",
@@ -141,7 +140,7 @@ async def fetch_latest_news(callback: types.CallbackQuery):
         try:
             feed = feedparser.parse(url)
             if feed.entries:
-                entry = feed.entries[0] # প্রতিটি সাইট থেকে সর্বশেষ ১টি নিউজ
+                entry = feed.entries[0]
                 news_list.append(f"📌 **{entry.title}**\n🔗 [বিস্তারিত পড়ুন]({entry.link})")
         except Exception:
             continue
