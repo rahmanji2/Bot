@@ -2,14 +2,13 @@ import asyncio
 import json
 import urllib.request
 import urllib.parse
+import re
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import threading
 
-# আপনার বটের টোকেন
 BOT_TOKEN = "9184579325:AAFi1PFbj39vGpyjVa3TQM2Tob_akfE_RsM"
 BASE_URL = f"https://api.telegram.org/bot{BOT_TOKEN}"
 
-# প্যানেল বা সার্ভার লাইভ রাখার জন্য একটি ডামি লোকাল সার্ভার (যাতে ক্র্যাশ না করে)
 class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -20,7 +19,6 @@ def run_web_server():
     server = HTTPServer(('0.0.0.0', 8080), SimpleHandler)
     server.serve_forever()
 
-# টেলিগ্রাম থেকে আপডেট ফেচ করার ফাংশন (Polling)
 def get_updates(offset=None):
     url = f"{BASE_URL}/getUpdates?timeout=30"
     if offset:
@@ -34,7 +32,6 @@ def get_updates(offset=None):
         print(f"Error fetching updates: {e}")
     return []
 
-# টেলিগ্রামে মেসেজ পাঠানোর ফাংশন
 def send_message(chat_id, text, reply_markup=None):
     url = f"{BASE_URL}/sendMessage"
     payload = {
@@ -51,12 +48,11 @@ def send_message(chat_id, text, reply_markup=None):
     except Exception as e:
         print(f"Error sending message: {e}")
 
-# মেইন লজিক ও কমান্ড হ্যান্ডেলার
 async def main():
     print("🤖 Pure Python Bot is starting...")
     offset = None
     
-    # ব্যাকগ্রাউন্ডে ওয়েব সার্ভার রান করা
+    # ব্যাকগ্রাউন্ডে ডামি ওয়েব সার্ভার রান করা (প্যানেল লাইভ রাখার জন্য)
     threading.Thread(target=run_web_server, daemon=True).start()
 
     while True:
@@ -64,7 +60,6 @@ async def main():
         for update in updates:
             offset = update["update_id"] + 1
             
-            # মেসেজ চেক করা
             if "message" in update:
                 message = update["message"]
                 chat_id = message["chat"]["id"]
@@ -72,17 +67,15 @@ async def main():
                 user_name = message["from"].get("first_name", "User")
                 
                 if text == "/start":
-                    # ইনলাইন বাটনসহ মেনু
                     keyboard = {
                         "inline_keyboard": [
                             [{"text": "🎁 Join Giveaway", "callback_data": "giveaway"}],
                             [{"text": "📰 Latest News", "callback_data": "news"}]
                         ]
                     }
-                    welcome_text = f"স্বাগতম, *{user_name}*!\n\nএটি আপনার পিওর পাইথন বট। নিচের অপশন থেকে সিলেক্ট করুন:"
+                    welcome_text = f"স্বাগতম, *{user_name}*!\n\nএটি আপনার অল-ইন-ওয়ান বট। নিচের অপশন থেকে সিলেক্ট করুন:"
                     send_message(chat_id, welcome_text, json.dumps(keyboard))
                     
-            # ইনলাইন বাটন ক্লিক হ্যান্ডেল করা (Callback Query)
             elif "callback_query" in update:
                 callback = update["callback_query"]
                 chat_id = callback["message"]["chat"]["id"]
@@ -91,17 +84,23 @@ async def main():
                 if data == "giveaway":
                     send_message(chat_id, "🎉 অভিনন্দন! সফলভাবে গিভঅ্যাওয়েতে আপনার নাম এন্ট্রি করা হয়েছে।")
                 elif data == "news":
-                    # প্রথম আলোর RSS থেকে হেডার ফেচ করার বিল্ট-ইন পদ্ধতি
                     try:
-                        req = urllib.request.urlopen("https://www.prothomalo.com/feed/", timeout=10)
+                        req_obj = urllib.request.Request(
+                            "https://www.prothomalo.com/feed/",
+                            headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+                        )
+                        req = urllib.request.urlopen(req_obj, timeout=10)
                         xml_data = req.read().decode('utf-8')
-                        # সিম্পল ট্যাগ এক্সট্রাকশন (লাইব্রেরি ছাড়া)
-                        start = xml_data.find("<title>") + 7
-                        end = xml_data.find("</title>")
-                        news_title = xml_data[start:end]
-                        news_text = f"📰 *সর্বশেষ সংবাদ (প্রথম আলো):*\n\n📌 {news_title}"
-                    except:
-                        news_text = "❌ দুঃখিত, এই মুহূর্তে নিউজ লোড করা যাচ্ছে না।"
+                        
+                        titles = re.findall(r'<item>.*?<title>(.*?)</title>.*?</item>', xml_data, re.DOTALL)
+                        
+                        if titles:
+                            news_title = titles[0].replace('<![CDATA[', '').replace(']]>', '').strip()
+                            news_text = f"📰 *সর্বশেষ সংবাদ (প্রথম আলো):*\n\n📌 {news_title}"
+                        else:
+                            news_text = "❌ এই মুহূর্তে কোনো সংবাদ পাওয়া যায়নি।"
+                    except Exception as e:
+                        news_text = f"❌ নিউজ লোড করতে সমস্যা হচ্ছে।"
                         
                     send_message(chat_id, news_text)
                     
