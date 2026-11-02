@@ -9,6 +9,13 @@ import threading
 BOT_TOKEN = "9184579325:AAFi1PFbj39vGpyjVa3TQM2Tob_akfE_RsM"
 BASE_URL = f"https://api.telegram.org/bot{BOT_TOKEN}"
 
+# নিউজ পেপারগুলোর RSS লিংক এবং নাম
+NEWS_SOURCES = {
+    "news_prothomalo": ("প্রথম আলো", "https://www.prothomalo.com/feed/"),
+    "news_jugantor": ("যুগান্তর", "https://www.jugantor.com/feed/"),
+    "news_kalerkantho": ("কালের কণ্ঠ", "https://www.kalerkantho.com/rss.xml")
+}
+
 class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -52,7 +59,6 @@ async def main():
     print("🤖 Pure Python Bot is starting...")
     offset = None
     
-    # ব্যাকগ্রাউন্ডে ডামি ওয়েব সার্ভার রান করা (প্যানেল লাইভ রাখার জন্য)
     threading.Thread(target=run_web_server, daemon=True).start()
 
     while True:
@@ -67,13 +73,16 @@ async def main():
                 user_name = message["from"].get("first_name", "User")
                 
                 if text == "/start":
+                    # মূল মেনু যেখানে নিউজ পেপার সিলেক্ট করার অপশন থাকবে
                     keyboard = {
                         "inline_keyboard": [
                             [{"text": "🎁 Join Giveaway", "callback_data": "giveaway"}],
-                            [{"text": "📰 Latest News", "callback_data": "news"}]
+                            [{"text": "📰 প্রথম আলো নিউজ", "callback_data": "news_prothomalo"}],
+                            [{"text": "📰 যুগান্তর নিউজ", "callback_data": "news_jugantor"}],
+                            [{"text": "📰 কালের কণ্ঠ নিউজ", "callback_data": "news_kalerkantho"}]
                         ]
                     }
-                    welcome_text = f"স্বাগতম, *{user_name}*!\n\nএটি আপনার অল-ইন-ওয়ান বট। নিচের অপশন থেকে সিলেক্ট করুন:"
+                    welcome_text = f"স্বাগতম, *{user_name}*!\n\nপছন্দের নিউজপেপার বা অপশনটি সিলেক্ট করুন:"
                     send_message(chat_id, welcome_text, json.dumps(keyboard))
                     
             elif "callback_query" in update:
@@ -83,10 +92,11 @@ async def main():
                 
                 if data == "giveaway":
                     send_message(chat_id, "🎉 অভিনন্দন! সফলভাবে গিভঅ্যাওয়েতে আপনার নাম এন্ট্রি করা হয়েছে।")
-                elif data == "news":
+                elif data in NEWS_SOURCES:
+                    paper_name, feed_url = NEWS_SOURCES[data]
                     try:
                         req_obj = urllib.request.Request(
-                            "https://www.prothomalo.com/feed/",
+                            feed_url,
                             headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
                         )
                         req = urllib.request.urlopen(req_obj, timeout=10)
@@ -96,11 +106,11 @@ async def main():
                         
                         if titles:
                             news_title = titles[0].replace('<![CDATA[', '').replace(']]>', '').strip()
-                            news_text = f"📰 *সর্বশেষ সংবাদ (প্রথম আলো):*\n\n📌 {news_title}"
+                            news_text = f"📰 *সর্বশেষ সংবাদ ({paper_name}):*\n\n📌 {news_title}"
                         else:
-                            news_text = "❌ এই মুহূর্তে কোনো সংবাদ পাওয়া যায়নি।"
+                            news_text = f"❌ এই মুহূর্তে {paper_name}-এ কোনো সংবাদ পাওয়া যায়নি।"
                     except Exception as e:
-                        news_text = f"❌ নিউজ লোড করতে সমস্যা হচ্ছে।"
+                        news_text = f"❌ {paper_name}-এর নিউজ লোড করতে সমস্যা হচ্ছে।"
                         
                     send_message(chat_id, news_text)
                     
